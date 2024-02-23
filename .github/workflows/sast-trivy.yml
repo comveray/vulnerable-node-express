@@ -1,0 +1,44 @@
+name: Test AWS Lambda DefectDojo Import via S3
+on: push
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Trivy vulnerability scanner in fs mode
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: upload SARIF
+      env:
+          LAMBDA_URL: "${{ secrets.LAMBDA_URL }}"
+          APP_ID: "${{ secrets.APP_ID }}"
+      run: |
+          bash -s << 'EOF'
+          TMPFILE=$(mktemp)
+          SCANFILE="trivy-results.sarif"
+          curl -k -o "$TMPFILE" -X POST -H 'content-type: application/json'  -d '{"app_id":"'$APP_ID'","ext":"sarif"}' $LAMBDA_URL
+          cat $TMPFILE
+          URL=`jq -r ".url" "$TMPFILE"`
+          KEY=`jq -r ".fields.key" "$TMPFILE"`
+          DATA=""
+          for FIELD in `jq ".fields | keys[]" "$TMPFILE"`
+          do
+            if [[ "$FIELD" == "\"key\"" ]] ; then continue; fi
+            PARAM=$(echo $FIELD|tr -d '"')"="$(jq -r ".fields.$FIELD" $TMPFILE)
+            DATA=$DATA" -F $PARAM"
+          done
+          echo $DATA x
+          rm $TMPFILE
+          TMPUPLOAD="/tmp/$KEY"
+          cp "$SCANFILE"  $TMPUPLOAD
+          curl -k -v -L -F "key=$KEY" $DATA -F "file=@$TMPUPLOAD" $URL
+          rm $TMPUPLOAD
+          EOF
