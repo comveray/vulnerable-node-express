@@ -10,7 +10,7 @@ jobs:
       image: zerosource/dojo-s3import-semgrep
       env:
         LAMBDA_URL: ${{ secrets.LAMBDA_URL }}
-        APP_ID: ${{ secrets.APP_ID }}
+        APP_ID: ${{ secrets.APP_ID_SEMGREP }}
         
     steps:
     - uses: actions/checkout@v2
